@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35919.96 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoxToObjConverter", "VoxToObjConverter\VoxToObjConverter.csproj", "{66C1AF86-6267-4553-9E5D-C729F625E8FA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoxToObjConverter.Core", "VoxToObjConverter.Core\VoxToObjConverter.Core.csproj", "{EB31C69B-F2C7-4494-A24C-8C3B522BB8A6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{66C1AF86-6267-4553-9E5D-C729F625E8FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{66C1AF86-6267-4553-9E5D-C729F625E8FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66C1AF86-6267-4553-9E5D-C729F625E8FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{66C1AF86-6267-4553-9E5D-C729F625E8FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB31C69B-F2C7-4494-A24C-8C3B522BB8A6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB31C69B-F2C7-4494-A24C-8C3B522BB8A6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB31C69B-F2C7-4494-A24C-8C3B522BB8A6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB31C69B-F2C7-4494-A24C-8C3B522BB8A6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {BC05335F-E75E-4768-9FD9-1333BFA03988}
+	EndGlobalSection
+EndGlobal
