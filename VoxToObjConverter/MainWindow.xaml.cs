@@ -20,7 +20,7 @@ namespace VoxToObjConverter
             var voxOptimizer = new VoxelModelOptimizer();
             IEnumerable<Voxel> optimizedVoxelModel = voxOptimizer.OptimizeModel(voxelModel);
 
-            var meshPrimitiveFactory = new MeshPrimitiveFactory();
+            var meshPrimitiveFactory = new SolidMeshBuilder();
             var mesh = meshPrimitiveFactory.CreateMeshFromVoxels(optimizedVoxelModel);
 
             var meshToObjExporter = new MeshToObjExporter();
