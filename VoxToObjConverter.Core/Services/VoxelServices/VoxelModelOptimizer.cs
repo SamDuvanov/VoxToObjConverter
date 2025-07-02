@@ -1,20 +1,11 @@
-﻿using VoxReader;
-using VoxReader.Interfaces;
+﻿using VoxReader.Interfaces;
+using VoxReader;
 
-namespace VoxToObjConverter.Core.Services
+namespace VoxToObjConverter.Core.Services.VoxelServices
 {
-    public class VoxParser
-    {
-        private IModel _voxModel;
-        private List<Voxel> _optimizedModel = [];
-
-        public void ReadModel()
-        {
-            var voxFile = VoxReader.VoxReader.Read("model.vox");
-            _voxModel = voxFile.Models[0];
-        }
-
-        public void OptimizeModel(IModel voxModel)
+    public class VoxelModelOptimizer
+    { 
+        public IEnumerable<Voxel> OptimizeModel(IModel voxModel)
         {
             var sizeX = voxModel.LocalSize.X;
             var sizeY = voxModel.LocalSize.Y;
@@ -66,7 +57,7 @@ namespace VoxToObjConverter.Core.Services
                 }
             }
 
-            _optimizedModel = surfaceVoxels;
+            return surfaceVoxels;
         }
     }
 }
