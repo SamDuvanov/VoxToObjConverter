@@ -12,15 +12,12 @@ namespace VoxToObjConverter.Core.Services.MeshServices
     {
         private const double EPSILON = 1e-9;
 
-        public DMesh3 GeneratePolygonMesh(IEnumerable<Voxel> voxels)
+        public DMesh3 GenerateTrianglePolygonMesh(IEnumerable<Voxel> voxels)
         {
-            var triangleMesh = CreateMeshFromVoxels(voxels);
-            var quadMesh = ConvertToQuadMesh(triangleMesh);
-
-            return quadMesh;
+            return CreateTriangleMeshFromVoxels(voxels);
         }
 
-        private DMesh3 CreateMeshFromVoxels(IEnumerable<Voxel> voxels)
+        private DMesh3 CreateTriangleMeshFromVoxels(IEnumerable<Voxel> voxels)
         {
             var mesh = new DMesh3();
             var voxelSet = new HashSet<(int x, int y, int z)>(
@@ -313,6 +310,112 @@ namespace VoxToObjConverter.Core.Services.MeshServices
                     hash = hash * 31 + hashZ;
                     return (int)hash;
                 }
+            }
+        }
+
+        public DMesh3 GenerateQuadMeshDirectly(IEnumerable<Voxel> voxels)
+        {
+            var mesh = new DMesh3();
+            var voxelSet = new HashSet<(int x, int y, int z)>(
+                voxels.Select(v => (v.LocalPosition.X, v.LocalPosition.Y, v.LocalPosition.Z)));
+
+            // Определяем границы модели с запасом для flood fill
+            var bounds = GetModelBounds(voxels);
+            var expandedBounds = (
+                minX: bounds.minX - 1,
+                maxX: bounds.maxX + 1,
+                minY: bounds.minY - 1,
+                maxY: bounds.maxY + 1,
+                minZ: bounds.minZ - 1,
+                maxZ: bounds.maxZ + 1
+            );
+
+            // Определяем внешнее пространство с помощью flood fill
+            var externalSpace = GetExternalSpace(voxelSet, expandedBounds);
+
+            var processedFaces = new HashSet<(int x, int y, int z, int face)>();
+            var vertexCache = new Dictionary<Vector3d, int>(new Vector3dComparer());
+
+            var directions = new[]
+            {
+                new { Dir = (-1, 0, 0), Face = 0 }, // Left
+                new { Dir = (1, 0, 0), Face = 1 },  // Right
+                new { Dir = (0, -1, 0), Face = 2 }, // Bottom
+                new { Dir = (0, 1, 0), Face = 3 },  // Top
+                new { Dir = (0, 0, -1), Face = 4 }, // Back
+                new { Dir = (0, 0, 1), Face = 5 }   // Front
+            };
+
+            foreach (var voxel in voxels)
+            {
+                var p = voxel.LocalPosition;
+                int x = p.X, y = p.Y, z = p.Z;
+
+                foreach (var dir in directions)
+                {
+                    var (dx, dy, dz) = dir.Dir;
+                    var faceKey = (x, y, z, dir.Face);
+
+                    if (processedFaces.Contains(faceKey))
+                        continue;
+
+                    var neighborPos = (x + dx, y + dy, z + dz);
+
+                    // Создаем грань только если:
+                    // 1. Нет соседнего вокселя
+                    // 2. Соседняя позиция принадлежит внешнему пространству
+                    if (!voxelSet.Contains(neighborPos) && externalSpace.Contains(neighborPos))
+                    {
+                        var quad = GenerateFaceQuad(x, y, z, dir.Face);
+                        AddQuadDirectlyToMesh(mesh, vertexCache, quad);
+                        processedFaces.Add(faceKey);
+                    }
+                }
+            }
+
+            return mesh;
+        }
+
+        private void AddQuadDirectlyToMesh(DMesh3 mesh, Dictionary<Vector3d, int> vertexCache, Vector3d[] quad)
+        {
+            int[] ids = new int[4];
+
+            // Получаем или создаем вершины
+            for (int i = 0; i < 4; i++)
+            {
+                if (!vertexCache.TryGetValue(quad[i], out int vid))
+                {
+                    vid = mesh.AppendVertex(quad[i]);
+                    vertexCache[quad[i]] = vid;
+                }
+                ids[i] = vid;
+            }
+
+            // Проверяем корректность индексов
+            if (ids.Any(id => id < 0))
+                return;
+
+            try
+            {
+                // Создаем четырехугольник как два треугольника с правильной ориентацией
+                // Первый треугольник: 0-1-2
+                // Второй треугольник: 0-2-3
+                var t1 = mesh.AppendTriangle(ids[0], ids[1], ids[2]);
+                var t2 = mesh.AppendTriangle(ids[0], ids[2], ids[3]);
+
+                // Если треугольники не создались, пробуем обратную ориентацию
+                if (t1 == DMesh3.InvalidID || t2 == DMesh3.InvalidID)
+                {
+                    if (t1 != DMesh3.InvalidID) mesh.RemoveTriangle(t1);
+                    if (t2 != DMesh3.InvalidID) mesh.RemoveTriangle(t2);
+
+                    mesh.AppendTriangle(ids[0], ids[2], ids[1]);
+                    mesh.AppendTriangle(ids[0], ids[3], ids[2]);
+                }
+            }
+            catch
+            {
+                // Игнорируем некорректные четырехугольники
             }
         }
     }
