@@ -6,37 +6,52 @@ namespace VoxToObjConverter.Core.Services.MeshServices
 {
     /// <summary>
     /// Builds a watertight mesh from voxels using marching cubes approach for smooth surfaces.
+    /// Removes internal faces to preserve only the outer shell.
     /// </summary>
     public class SolidMeshBuilder
     {
         private const double EPSILON = 1e-9;
 
-        public DMesh3 CreateMeshFromVoxels(IEnumerable<Voxel> voxels)
+        public DMesh3 GeneratePolygonMesh(IEnumerable<Voxel> voxels)
+        {
+            var triangleMesh = CreateMeshFromVoxels(voxels);
+            var quadMesh = ConvertToQuadMesh(triangleMesh);
+
+            return quadMesh;
+        }
+
+        private DMesh3 CreateMeshFromVoxels(IEnumerable<Voxel> voxels)
         {
             var mesh = new DMesh3();
-            var voxelSet = new HashSet<(int x, int y, int z)>();
+            var voxelSet = new HashSet<(int x, int y, int z)>(
+                voxels.Select(v => (v.LocalPosition.X, v.LocalPosition.Y, v.LocalPosition.Z)));
 
-            // Create voxel set for fast lookup
-            foreach (var v in voxels)
-            {
-                var p = v.LocalPosition;
-                voxelSet.Add((p.X, p.Y, p.Z));
-            }
+            // Define model bounds with margin for flood fill
+            var bounds = GetModelBounds(voxels);
+            var expandedBounds = (
+                minX: bounds.minX - 1,
+                maxX: bounds.maxX + 1,
+                minY: bounds.minY - 1,
+                maxY: bounds.maxY + 1,
+                minZ: bounds.minZ - 1,
+                maxZ: bounds.maxZ + 1
+            );
 
-            // Use greedy meshing to merge adjacent faces
+            // Define external space using flood fill
+            var externalSpace = GetExternalSpace(voxelSet, expandedBounds);
+
             var processedFaces = new HashSet<(int x, int y, int z, int face)>();
             var vertexCache = new Dictionary<Vector3d, int>(new Vector3dComparer());
 
-            // 6 directions: Left, Right, Bottom, Top, Back, Front
             var directions = new[]
             {
-            new { Dir = (-1, 0, 0), Face = 0, Name = "Left" },
-            new { Dir = (1, 0, 0), Face = 1, Name = "Right" },
-            new { Dir = (0, -1, 0), Face = 2, Name = "Bottom" },
-            new { Dir = (0, 1, 0), Face = 3, Name = "Top" },
-            new { Dir = (0, 0, -1), Face = 4, Name = "Back" },
-            new { Dir = (0, 0, 1), Face = 5, Name = "Front" }
-        };
+                new { Dir = (-1, 0, 0), Face = 0 }, // Left
+                new { Dir = (1, 0, 0), Face = 1 },  // Right
+                new { Dir = (0, -1, 0), Face = 2 }, // Bottom
+                new { Dir = (0, 1, 0), Face = 3 },  // Top
+                new { Dir = (0, 0, -1), Face = 4 }, // Back
+                new { Dir = (0, 0, 1), Face = 5 }   // Front
+            };
 
             foreach (var voxel in voxels)
             {
@@ -48,20 +63,21 @@ namespace VoxToObjConverter.Core.Services.MeshServices
                     var (dx, dy, dz) = dir.Dir;
                     var faceKey = (x, y, z, dir.Face);
 
-                    // Skip already processed faces
                     if (processedFaces.Contains(faceKey))
                         continue;
 
-                    // Check if face is needed (no adjacent voxel)
-                    if (voxelSet.Contains((x + dx, y + dy, z + dz)))
-                        continue;
+                    var neighborPos = (x + dx, y + dy, z + dz);
 
-                    // Generate optimized face
-                    var faceQuads = GenerateGreedyFace(voxelSet, processedFaces, x, y, z, dir.Face, dir.Dir);
-
-                    foreach (var quad in faceQuads)
+                    // Create face only if:
+                    // 1. No neighboring voxel exists
+                    // 2. Neighboring position belongs to external space
+                    if (!voxelSet.Contains(neighborPos) && externalSpace.Contains(neighborPos))
                     {
-                        AddQuadToMesh(mesh, vertexCache, quad, dir.Face);
+                        var faceQuads = GenerateGreedyFace(voxelSet, processedFaces, x, y, z, dir.Face, dir.Dir);
+                        foreach (var quad in faceQuads)
+                        {
+                            AddQuadToMesh(mesh, vertexCache, quad, dir.Face);
+                        }
                     }
                 }
             }
@@ -69,15 +85,70 @@ namespace VoxToObjConverter.Core.Services.MeshServices
             return mesh;
         }
 
+        private HashSet<(int x, int y, int z)> GetExternalSpace(HashSet<(int x, int y, int z)> voxelSet,
+            (int minX, int maxX, int minY, int maxY, int minZ, int maxZ) bounds)
+        {
+            var externalSpace = new HashSet<(int x, int y, int z)>();
+            var queue = new Queue<(int x, int y, int z)>();
+            var visited = new HashSet<(int x, int y, int z)>();
+
+            // Start flood fill from corner of expanded area
+            var startPoint = (bounds.minX, bounds.minY, bounds.minZ);
+            queue.Enqueue(startPoint);
+            visited.Add(startPoint);
+
+            var directions = new[]
+            {
+                (-1, 0, 0), (1, 0, 0),
+                (0, -1, 0), (0, 1, 0),
+                (0, 0, -1), (0, 0, 1)
+            };
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                externalSpace.Add(current);
+
+                foreach (var (dx, dy, dz) in directions)
+                {
+                    var next = (current.x + dx, current.y + dy, current.z + dz);
+
+                    // Check bounds
+                    if (next.Item1 < bounds.minX || next.Item1 > bounds.maxX ||
+                        next.Item2 < bounds.minY || next.Item2 > bounds.maxY ||
+                        next.Item3 < bounds.minZ || next.Item3 > bounds.maxZ)
+                        continue;
+
+                    // Skip already visited points and voxels
+                    if (visited.Contains(next) || voxelSet.Contains(next))
+                        continue;
+
+                    visited.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+
+            return externalSpace;
+        }
+
+        private (int minX, int maxX, int minY, int maxY, int minZ, int maxZ) GetModelBounds(IEnumerable<Voxel> voxels)
+        {
+            var positions = voxels.Select(v => v.LocalPosition).ToList();
+            return (
+                minX: positions.Min(p => p.X),
+                maxX: positions.Max(p => p.X),
+                minY: positions.Min(p => p.Y),
+                maxY: positions.Max(p => p.Y),
+                minZ: positions.Min(p => p.Z),
+                maxZ: positions.Max(p => p.Z)
+            );
+        }
+
         private List<Vector3d[]> GenerateGreedyFace(HashSet<(int x, int y, int z)> voxelSet,
             HashSet<(int x, int y, int z, int face)> processedFaces,
             int startX, int startY, int startZ, int faceType, (int dx, int dy, int dz) direction)
         {
             var quads = new List<Vector3d[]>();
-            var visited = new HashSet<(int x, int y, int z)>();
-
-            // Simple version - create one face per voxel
-            // Can be improved with greedy meshing in the future
             var quad = GenerateFaceQuad(startX, startY, startZ, faceType);
             quads.Add(quad);
 
@@ -96,37 +167,37 @@ namespace VoxToObjConverter.Core.Services.MeshServices
 
             switch (faceType)
             {
-                case 0: // Left face (-X) - normal points left
+                case 0: // Left (-X)
                     quad[0] = new Vector3d(minX, minY, minZ);
                     quad[1] = new Vector3d(minX, minY, maxZ);
                     quad[2] = new Vector3d(minX, maxY, maxZ);
                     quad[3] = new Vector3d(minX, maxY, minZ);
                     break;
-                case 1: // Right face (+X) - normal points right
+                case 1: // Right (+X)
                     quad[0] = new Vector3d(maxX, minY, minZ);
                     quad[1] = new Vector3d(maxX, maxY, minZ);
                     quad[2] = new Vector3d(maxX, maxY, maxZ);
                     quad[3] = new Vector3d(maxX, minY, maxZ);
                     break;
-                case 2: // Bottom face (-Y) - normal points down
+                case 2: // Bottom (-Y)
                     quad[0] = new Vector3d(minX, minY, minZ);
                     quad[1] = new Vector3d(maxX, minY, minZ);
                     quad[2] = new Vector3d(maxX, minY, maxZ);
                     quad[3] = new Vector3d(minX, minY, maxZ);
                     break;
-                case 3: // Top face (+Y) - normal points up
+                case 3: // Top (+Y)
                     quad[0] = new Vector3d(minX, maxY, minZ);
                     quad[1] = new Vector3d(minX, maxY, maxZ);
                     quad[2] = new Vector3d(maxX, maxY, maxZ);
                     quad[3] = new Vector3d(maxX, maxY, minZ);
                     break;
-                case 4: // Back face (-Z) - normal points back
+                case 4: // Back (-Z)
                     quad[0] = new Vector3d(minX, minY, minZ);
                     quad[1] = new Vector3d(minX, maxY, minZ);
                     quad[2] = new Vector3d(maxX, maxY, minZ);
                     quad[3] = new Vector3d(maxX, minY, minZ);
                     break;
-                case 5: // Front face (+Z) - normal points forward
+                case 5: // Front (+Z)
                     quad[0] = new Vector3d(minX, minY, maxZ);
                     quad[1] = new Vector3d(maxX, minY, maxZ);
                     quad[2] = new Vector3d(maxX, maxY, maxZ);
@@ -139,7 +210,6 @@ namespace VoxToObjConverter.Core.Services.MeshServices
 
         private void AddQuadToMesh(DMesh3 mesh, Dictionary<Vector3d, int> vertexCache, Vector3d[] quad, int faceType)
         {
-            // Add vertices with deduplication
             int[] ids = new int[4];
             for (int i = 0; i < 4; i++)
             {
@@ -151,20 +221,16 @@ namespace VoxToObjConverter.Core.Services.MeshServices
                 ids[i] = vid;
             }
 
-            // Check validity of indices
             if (ids.Any(id => id < 0))
                 return;
 
-            // Add triangles with correct orientation
             try
             {
                 var t1 = mesh.AppendTriangle(ids[0], ids[1], ids[2]);
                 var t2 = mesh.AppendTriangle(ids[0], ids[2], ids[3]);
 
-                // Check if triangles were added successfully
                 if (t1 == DMesh3.InvalidID || t2 == DMesh3.InvalidID)
                 {
-                    // Try reverse order
                     mesh.AppendTriangle(ids[0], ids[2], ids[1]);
                     mesh.AppendTriangle(ids[0], ids[3], ids[2]);
                 }
@@ -175,20 +241,14 @@ namespace VoxToObjConverter.Core.Services.MeshServices
             }
         }
 
-        /// <summary>
-        /// Additional method for mesh post-processing
-        /// </summary>
         public DMesh3 PostProcessMesh(DMesh3 mesh)
         {
             try
             {
-                // Compact mesh (remove unused vertices)
                 mesh.CompactInPlace();
 
-                // Fix triangle orientation if there are issues
                 if (!mesh.IsClosed())
                 {
-                    // Try to fix orientation manually
                     FixMeshOrientation(mesh);
                 }
 
@@ -196,16 +256,12 @@ namespace VoxToObjConverter.Core.Services.MeshServices
             }
             catch
             {
-                return mesh; // Return original mesh on error
+                return mesh;
             }
         }
 
-        /// <summary>
-        /// Fixes mesh triangle orientation
-        /// </summary>
         private void FixMeshOrientation(DMesh3 mesh)
         {
-            // Simple orientation check and fix
             var trianglesToFlip = new List<int>();
 
             foreach (int tid in mesh.TriangleIndices())
@@ -215,40 +271,25 @@ namespace VoxToObjConverter.Core.Services.MeshServices
 
                 var tri = mesh.GetTriangle(tid);
                 var normal = mesh.GetTriNormal(tid);
-
-                // Get triangle center
                 var centroid = mesh.GetTriCentroid(tid);
 
-                // Simple heuristic: if normal points "inward",
-                // then triangle needs to be flipped
-                // This works for convex objects
                 if (IsNormalPointingInward(centroid, normal))
                 {
                     trianglesToFlip.Add(tid);
                 }
             }
 
-            // Flip triangles
             foreach (int tid in trianglesToFlip)
             {
                 mesh.ReverseTriOrientation(tid);
             }
         }
 
-        /// <summary>
-        /// Simple normal direction check (for convex objects)
-        /// </summary>
         private bool IsNormalPointingInward(Vector3d centroid, Vector3d normal)
         {
-            // For simple voxel models, we can assume
-            // that object is in positive coordinate space
-            // and normals should point away from origin
             return Vector3d.Dot(centroid, normal) < 0;
         }
 
-        /// <summary>
-        /// Comparer for precise Vector3d comparison
-        /// </summary>
         private class Vector3dComparer : IEqualityComparer<Vector3d>
         {
             public bool Equals(Vector3d x, Vector3d y)
@@ -260,7 +301,6 @@ namespace VoxToObjConverter.Core.Services.MeshServices
 
             public int GetHashCode(Vector3d obj)
             {
-                // Round to fixed precision for stable hashing
                 long hashX = (long)Math.Round(obj.x / EPSILON);
                 long hashY = (long)Math.Round(obj.y / EPSILON);
                 long hashZ = (long)Math.Round(obj.z / EPSILON);
