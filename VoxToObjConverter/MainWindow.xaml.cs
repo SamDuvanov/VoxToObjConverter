@@ -24,6 +24,7 @@ namespace VoxToObjConverter
             var mesh = meshPrimitiveFactory.GenerateQuadMeshDirectly(optimizedVoxelModel);
 
             var meshToObjExporter = new QuadObjExporter();
+            var meshToObjExporter2 = new MeshToObjExporter();
             meshToObjExporter.ExportToFile(mesh, "model_optimized.obj");
         }
     }
