@@ -1,4 +1,5 @@
 ﻿using g3;
+using gs;
 using System.Windows;
 using VoxReader;
 using VoxToObjConverter.Core.Services.MeshServices;
@@ -23,9 +24,14 @@ namespace VoxToObjConverter
             var meshBuilder = new MeshBuilder();
             var mesh = meshBuilder.GenerateSolidBoxyMesh(optimizedVoxelModel);
 
+
+            var welder = new MeshWelder(mesh);
+            welder.Weld();
+
+
             var meshToObjExporter = new QuadObjExporter();
             var meshToObjExporter2 = new MeshToObjExporter();
-            meshToObjExporter.ExportToFile(mesh, "model_optimized.obj");
+            meshToObjExporter2.ExportToFile(mesh, "model_optimized.obj");
         }
     }
 }
