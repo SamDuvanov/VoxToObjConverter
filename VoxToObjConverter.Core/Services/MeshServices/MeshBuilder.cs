@@ -118,46 +118,46 @@ public class MeshBuilder
 
         // Добавляем грани только если соседняя позиция является внешним пространством
 
-        // Передняя грань (Z-)
+        // Передняя грань (Z-) - нормаль направлена в сторону -Z
         var neighborZMinus = (x, y, z - 1);
         if (!voxelSet.Contains(neighborZMinus) && externalSpace.Contains(neighborZMinus))
         {
-            AddQuad(mesh, v000, v010, v110, v100);
+            AddQuad(mesh, v000, v100, v110, v010);
         }
 
-        // Задняя грань (Z+)
+        // Задняя грань (Z+) - нормаль направлена в сторону +Z
         var neighborZPlus = (x, y, z + 1);
         if (!voxelSet.Contains(neighborZPlus) && externalSpace.Contains(neighborZPlus))
         {
-            AddQuad(mesh, v101, v111, v011, v001);
+            AddQuad(mesh, v001, v011, v111, v101);
         }
 
-        // Левая грань (X-)
+        // Левая грань (X-) - нормаль направлена в сторону -X
         var neighborXMinus = (x - 1, y, z);
         if (!voxelSet.Contains(neighborXMinus) && externalSpace.Contains(neighborXMinus))
         {
-            AddQuad(mesh, v001, v011, v010, v000);
+            AddQuad(mesh, v000, v010, v011, v001);
         }
 
-        // Правая грань (X+)
+        // Правая грань (X+) - нормаль направлена в сторону +X
         var neighborXPlus = (x + 1, y, z);
         if (!voxelSet.Contains(neighborXPlus) && externalSpace.Contains(neighborXPlus))
         {
-            AddQuad(mesh, v100, v110, v111, v101);
+            AddQuad(mesh, v100, v101, v111, v110);
         }
 
-        // Нижняя грань (Y-)
+        // Нижняя грань (Y-) - нормаль направлена в сторону -Y
         var neighborYMinus = (x, y - 1, z);
         if (!voxelSet.Contains(neighborYMinus) && externalSpace.Contains(neighborYMinus))
         {
-            AddQuad(mesh, v000, v100, v101, v001);
+            AddQuad(mesh, v000, v001, v101, v100);
         }
 
-        // Верхняя грань (Y+)
+        // Верхняя грань (Y+) - нормаль направлена в сторону +Y
         var neighborYPlus = (x, y + 1, z);
         if (!voxelSet.Contains(neighborYPlus) && externalSpace.Contains(neighborYPlus))
         {
-            AddQuad(mesh, v011, v111, v110, v010);
+            AddQuad(mesh, v010, v110, v111, v011);
         }
     }
 
@@ -169,7 +169,7 @@ public class MeshBuilder
         var i2 = mesh.AppendVertex(v2);
         var i3 = mesh.AppendVertex(v3);
 
-        // Добавляем два треугольника для квада
+        // Добавляем два треугольника для квада с правильным порядком вершин (counter-clockwise)
         mesh.AppendTriangle(i0, i1, i2);
         mesh.AppendTriangle(i0, i2, i3);
     }
