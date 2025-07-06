@@ -7,7 +7,7 @@ namespace VoxToObjConverter.Core.Services.VoxelServices
     {
         public IModel ReadModel()
         {
-            var voxFile = VoxReader.VoxReader.Read("Vox Models/model.vox");
+            var voxFile = VoxReader.VoxReader.Read("Vox Models/castle.vox");
 
             return voxFile.Models[0];
         }
