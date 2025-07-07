@@ -1,9 +1,7 @@
 ﻿using g3;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
+
+namespace VoxToObjConverter.Core.Services.MeshServices;
 
 /// <summary>
 /// Exports a DMesh3 mesh to an .obj file using quads where possible.
@@ -28,6 +26,12 @@ public class QuadObjExporter
             Vector3d v = mesh.GetVertex(vid);
             // Use standard formatting to avoid locale issues (e.g., commas in decimals)
             sb.AppendLine(string.Format("v {0:F6} {1:F6} {2:F6}", v.x, v.y, v.z));
+        }
+
+        foreach (int vid in mesh.VertexIndices())
+        {
+            var n = mesh.GetVertexNormal(vid);
+            sb.AppendLine(string.Format("vn {0:F6} {1:F6} {2:F6}", n.x, n.y, n.z));
         }
 
         // Extract quad candidates from adjacent triangles

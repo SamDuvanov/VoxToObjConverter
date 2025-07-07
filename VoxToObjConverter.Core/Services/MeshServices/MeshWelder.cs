@@ -27,6 +27,8 @@ public class MeshWelder
         // Компактификация
         _mesh.CompactInPlace();
 
+        MeshNormals.QuickCompute(_mesh);
+
         // Проверка валидности
         _mesh.CheckValidity();
     }

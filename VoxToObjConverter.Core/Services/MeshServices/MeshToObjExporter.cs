@@ -1,6 +1,5 @@
 ﻿using g3;
 using System.Text;
-using VoxReader;
 
 namespace VoxToObjConverter.Core.Services.MeshServices
 {
@@ -25,6 +24,13 @@ namespace VoxToObjConverter.Core.Services.MeshServices
             {
                 var tri = mesh.GetTriangle(tid);
                 sb.AppendLine($"f {tri.a + 1} {tri.b + 1} {tri.c + 1}");
+            }
+
+            // Write norlmals
+            foreach (int vid in mesh.VertexIndices())
+            {
+                var n = mesh.GetVertexNormal(vid);
+                sb.AppendLine($"vn {n.x} {n.y} {n.z}");
             }
 
             return sb.ToString();
