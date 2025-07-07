@@ -8,7 +8,7 @@ namespace VoxToObjConverter.Core.Services.MeshServices
         /// <summary>
         /// Exports a DMesh3 mesh to an OBJ format string.
         /// </summary>
-        public string ExportToString(DMesh3 mesh)
+        private string ExportToString(DMesh3 mesh)
         {
             var sb = new StringBuilder();
 
