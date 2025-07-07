@@ -1,7 +1,7 @@
 ﻿using g3;
 using System.Text;
 
-namespace VoxToObjConverter.Core.Services.MeshServices;
+namespace VoxToObjConverter.Core.Services.MeshServices.Exporters;
 
 /// <summary>
 /// Exports a DMesh3 mesh to an .obj file using quads where possible.
