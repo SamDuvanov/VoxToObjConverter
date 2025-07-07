@@ -24,10 +24,8 @@ namespace VoxToObjConverter
             var meshBuilder = new MeshBuilder();
             var mesh = meshBuilder.GenerateSolidBoxyMesh(optimizedVoxelModel);
 
-
             var welder = new MeshWelder(mesh);
             welder.Weld();
-
 
             var meshToObjExporter = new QuadObjExporter();
             var meshToObjExporter2 = new MeshToObjExporter();

@@ -1,4 +1,8 @@
 ﻿using g3;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 
 /// <summary>
@@ -7,7 +11,7 @@ using System.Text;
 /// </summary>
 public class QuadObjExporter
 {
-    private const double CosAngleTolerance = 0.15; // Tolerance for cosine of 90°
+    private const double CosAngleTolerance = 0.15; // Tolerance for cosine of 90° (approx 81.3 to 98.7 degrees)
 
     /// <summary>
     /// Exports the given mesh to an .obj file with quads and triangles.
@@ -22,7 +26,8 @@ public class QuadObjExporter
         foreach (int vid in mesh.VertexIndices())
         {
             Vector3d v = mesh.GetVertex(vid);
-            sb.AppendLine($"v {v.x:F6} {v.y:F6} {v.z:F6}");
+            // Use standard formatting to avoid locale issues (e.g., commas in decimals)
+            sb.AppendLine(string.Format("v {0:F6} {1:F6} {2:F6}", v.x, v.y, v.z));
         }
 
         // Extract quad candidates from adjacent triangles
@@ -62,92 +67,64 @@ public class QuadObjExporter
         var quads = new List<QuadInfo>();
         var processedTriangles = new HashSet<int>();
 
-        foreach (int tid in mesh.TriangleIndices())
+        foreach (int tid1 in mesh.TriangleIndices())
         {
-            if (processedTriangles.Contains(tid))
+            if (processedTriangles.Contains(tid1))
             {
                 continue;
             }
 
-            Vector3d normal = mesh.GetTriNormal(tid);
-            Vector3d centroid = mesh.GetTriCentroid(tid);
+            Index3i tri1_verts = mesh.GetTriangle(tid1);
 
-            int? pairTid = FindQuadPair(mesh, tid, normal, centroid, processedTriangles);
-
-            if (pairTid.HasValue)
+            // Iterate over the edges of triangle 1
+            for (int i = 0; i < 3; i++)
             {
-                QuadInfo quad = CreateQuad(mesh, tid, pairTid.Value);
-                if (quad != null)
+                int v1 = tri1_verts[i];
+                int v2 = tri1_verts[(i + 1) % 3]; // The next vertex in the triangle's winding order
+
+                int commonEdgeID = mesh.FindEdge(v1, v2);
+
+                if (commonEdgeID == DMesh3.InvalidID) continue; // Should not happen for valid triangles
+
+                // Get the two triangles connected by this edge
+                Index2i edgeTris = mesh.GetEdgeT(commonEdgeID);
+
+                // Find the neighbor triangle (the one that is not 'tid1')
+                int tid2 = DMesh3.InvalidID;
+                if (edgeTris.a == tid1)
                 {
-                    quads.Add(quad);
-                    processedTriangles.Add(tid);
-                    processedTriangles.Add(pairTid.Value);
+                    tid2 = edgeTris.b;
+                }
+                else if (edgeTris.b == tid1)
+                {
+                    tid2 = edgeTris.a;
+                }
+
+                // If a valid, unprocessed neighbor is found, attempt to form a quad
+                if (tid2 != DMesh3.InvalidID && !processedTriangles.Contains(tid2))
+                {
+                    AttemptAddQuad(mesh, tid1, tid2, quads, processedTriangles);
+                    // If a quad was successfully formed using 'tid1', 'tid1' is now processed.
+                    // We can break and move to the next unprocessed triangle.
+                    if (processedTriangles.Contains(tid1))
+                        break;
                 }
             }
         }
-
         return quads;
     }
 
-    /// <summary>
-    /// Finds a triangle that can form a quad with the given triangle.
-    /// </summary>
-    private int? FindQuadPair(
-        DMesh3 mesh,
-        int triangleId,
-        Vector3d normal,
-        Vector3d centroid,
-        HashSet<int> processed)
+    private void AttemptAddQuad(DMesh3 mesh, int tid1, int tid2, List<QuadInfo> quads, HashSet<int> processedTriangles)
     {
-        Index3i tri = mesh.GetTriangle(triangleId);
-        int[] vertices = { tri.a, tri.b, tri.c };
-
-        foreach (int vid in vertices)
+        QuadInfo? quad = CreateQuad(mesh, tid1, tid2);
+        if (quad != null)
         {
-            foreach (int neighborTid in mesh.VtxTrianglesItr(vid))
-            {
-                if (neighborTid == triangleId || processed.Contains(neighborTid))
-                {
-                    continue;
-                }
-
-                Vector3d neighborNormal = mesh.GetTriNormal(neighborTid);
-
-                if (Vector3d.Dot(normal, neighborNormal) < 0.99)
-                {
-                    continue;
-                }
-
-                Vector3d neighborCentroid = mesh.GetTriCentroid(neighborTid);
-                double planeDiff = Vector3d.Dot(normal, centroid - neighborCentroid);
-
-                if (Math.Abs(planeDiff) > 1e-6)
-                {
-                    continue;
-                }
-
-                Index3i neighborTri = mesh.GetTriangle(neighborTid);
-
-                if (CountSharedVertices(tri, neighborTri) == 2)
-                {
-                    return neighborTid;
-                }
-            }
+            quads.Add(quad);
+            processedTriangles.Add(tid1);
+            processedTriangles.Add(tid2);
         }
-
-        return null;
     }
 
-    /// <summary>
-    /// Counts how many vertices are shared between two triangles.
-    /// </summary>
-    private int CountSharedVertices(Index3i t1, Index3i t2)
-    {
-        int[] v1 = { t1.a, t1.b, t1.c };
-        int[] v2 = { t2.a, t2.b, t2.c };
-
-        return v1.Count(v => v2.Contains(v));
-    }
 
     /// <summary>
     /// Attempts to create a valid rectangular quad from two triangles.
@@ -157,15 +134,36 @@ public class QuadObjExporter
         Index3i tri1 = mesh.GetTriangle(t1Id);
         Index3i tri2 = mesh.GetTriangle(t2Id);
 
-        var allVertices = new[] { tri1.a, tri1.b, tri1.c, tri2.a, tri2.b, tri2.c };
-        var uniqueVertices = allVertices.Distinct().ToList();
+        // Find the common vertices (the shared edge) between tri1 and tri2
+        var commonVertices = tri1.array.Intersect(tri2.array).ToList();
 
-        if (uniqueVertices.Count != 4)
+        if (commonVertices.Count != 2)
         {
+            // Triangles must share exactly two vertices (an edge) to form a quad
             return null;
         }
 
-        int[] ordered = OrderQuadVertices(mesh, uniqueVertices);
+        // Get the non-common (opposite) vertices
+        // These are the "tips" of the two triangles that form the diagonal of the quad
+        var uniqueV1 = tri1.array.Except(commonVertices).Single();
+        var uniqueV2 = tri2.array.Except(commonVertices).Single();
+
+        // The four vertices of the potential quad are: 
+        // commonVertices[0], uniqueV1, commonVertices[1], uniqueV2.
+        // We put them in this initial order, and the OrderQuadVertices will sort them correctly.
+        List<int> quadVertices = new List<int>
+        {
+            commonVertices[0],
+            uniqueV1,
+            commonVertices[1],
+            uniqueV2
+        };
+
+
+        // Get the normal of the first triangle for consistent ordering
+        Vector3d referenceNormal = mesh.GetTriNormal(t1Id);
+
+        int[] ordered = OrderQuadVertices(mesh, quadVertices, referenceNormal);
 
         if (!IsRectangular(mesh, ordered))
         {
@@ -181,45 +179,51 @@ public class QuadObjExporter
     }
 
     /// <summary>
-    /// Orders 4 vertices in a consistent circular order based on center and normal.
+    /// Orders 4 vertices in a consistent counter-clockwise order based on a reference normal.
     /// </summary>
-    private int[] OrderQuadVertices(DMesh3 mesh, List<int> vertices)
+    private int[] OrderQuadVertices(DMesh3 mesh, List<int> vertices, Vector3d normal)
     {
         if (vertices.Count != 4)
             return vertices.ToArray();
 
-        Vector3d center = vertices
-            .Select(id => mesh.GetVertex(id))
-            .Aggregate(Vector3d.Zero, (sum, v) => sum + v) / 4.0;
+        Vector3d center = Vector3d.Zero;
+        foreach (int id in vertices)
+        {
+            center += mesh.GetVertex(id);
+        }
+        center /= 4.0;
 
-        // Estimate face normal from first 3 points
-        Vector3d v0 = mesh.GetVertex(vertices[0]);
-        Vector3d v1 = mesh.GetVertex(vertices[1]);
-        Vector3d v2 = mesh.GetVertex(vertices[2]);
-        Vector3d normal = Vector3d.Cross(v1 - v0, v2 - v0).Normalized;
+        // Create an orthonormal basis for the plane perpendicular to the normal.
+        // This is crucial for consistent 2D projection for angle sorting.
+        // Ensure that u and v are truly orthogonal and non-zero.
+        Vector3d u, v;
+        if (normal.Cross(Vector3d.AxisY).LengthSquared > MathUtil.Epsilon) // If normal is not parallel to Y-axis
+            u = normal.Cross(Vector3d.AxisY).Normalized;
+        else if (normal.Cross(Vector3d.AxisX).LengthSquared > MathUtil.Epsilon) // If normal is not parallel to X-axis
+            u = normal.Cross(Vector3d.AxisX).Normalized;
+        else // Fallback if normal is parallel to both X and Y (i.e., along Z)
+            u = normal.Cross(Vector3d.AxisZ).Normalized;
 
-        // Create basis in the plane of the quad
-        Vector3d refDir = Vector3d.Cross(normal, new Vector3d(0, 0, 1));
-        if (refDir.LengthSquared < 1e-6)
-            refDir = Vector3d.Cross(normal, new Vector3d(0, 1, 0));
-        refDir.Normalize();
+        v = normal.Cross(u).Normalized; // v will be orthogonal to both normal and u
 
-        Vector3d upDir = Vector3d.Cross(refDir, normal).Normalized;
-
+        // Sort vertices by angle around the center in the plane defined by u and v.
+        // This ensures counter-clockwise ordering when viewed from the direction of the normal.
         return vertices
-            .Select(id => new
+            .OrderBy(id =>
             {
-                Id = id,
-                Vertex = mesh.GetVertex(id)
+                Vector3d point = mesh.GetVertex(id);
+                Vector3d dir = point - center;
+
+                // Project 'dir' onto the plane defined by 'u' and 'v'
+                double x2d = dir.Dot(u);
+                double y2d = dir.Dot(v);
+
+                return Math.Atan2(y2d, x2d);
             })
-            .OrderBy(v =>
-            {
-                Vector3d dir = v.Vertex - center;
-                return Math.Atan2(Vector3d.Dot(dir, upDir), Vector3d.Dot(dir, refDir));
-            })
-            .Select(v => v.Id)
+            .Select(id => id)
             .ToArray();
     }
+
 
     /// <summary>
     /// Validates if the 4 points form a nearly-rectangular quad.
@@ -235,11 +239,23 @@ public class QuadObjExporter
 
         for (int i = 0; i < 4; i++)
         {
-            Vector3d a = points[i] - points[(i + 3) % 4];
-            Vector3d b = points[(i + 1) % 4] - points[i];
-            double dot = a.Normalized.Dot(b.Normalized);
+            Vector3d p_prev = points[(i + 3) % 4]; // Previous vertex in cyclic order
+            Vector3d p_curr = points[i];           // Current vertex (at the corner)
+            Vector3d p_next = points[(i + 1) % 4]; // Next vertex in cyclic order
 
-            if (Math.Abs(dot) > CosAngleTolerance)
+            // Check for degenerate edges (points too close)
+            if ((p_curr - p_prev).LengthSquared < MathUtil.Epsilon ||
+                (p_curr - p_next).LengthSquared < MathUtil.Epsilon)
+            {
+                return false;
+            }
+
+            Vector3d edge1 = (p_prev - p_curr).Normalized;
+            Vector3d edge2 = (p_next - p_curr).Normalized;
+
+            // The dot product of two normalized vectors is the cosine of the angle between them.
+            // For 90 degrees, the cosine is 0. We check if it's close to 0 within a tolerance.
+            if (Math.Abs(edge1.Dot(edge2)) > CosAngleTolerance)
             {
                 return false;
             }
