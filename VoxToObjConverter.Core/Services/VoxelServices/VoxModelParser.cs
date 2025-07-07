@@ -1,13 +1,12 @@
-﻿using VoxReader;
-using VoxReader.Interfaces;
+﻿using VoxReader.Interfaces;
 
 namespace VoxToObjConverter.Core.Services.VoxelServices
 {
-    public class VoxParser
+    public class VoxModelParser
     {
         public IModel ReadModel()
         {
-            var voxFile = VoxReader.VoxReader.Read("Vox Models/castle.vox");
+            var voxFile = VoxReader.VoxReader.Read("Vox Models/teapot.vox");
 
             return voxFile.Models[0];
         }

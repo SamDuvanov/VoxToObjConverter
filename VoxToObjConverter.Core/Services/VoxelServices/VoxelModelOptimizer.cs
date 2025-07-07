@@ -1,63 +1,66 @@
-﻿using VoxReader.Interfaces;
-using VoxReader;
+﻿using VoxReader;
+using VoxReader.Interfaces;
+using VoxToObjConverter.Core.Services.VoxelServices.Utils;
 
-namespace VoxToObjConverter.Core.Services.VoxelServices
+namespace VoxToObjConverter.Core.Services.VoxelServices;
+
+/// <summary>
+/// Optimizes a voxel model by retaining only surface voxels.
+/// </summary>
+public class VoxelModelOptimizer
 {
-    public class VoxelModelOptimizer
-    { 
-        public IEnumerable<Voxel> OptimizeModel(IModel voxModel)
+    private static readonly int[] NeighborOffsetX = { -1, 1, 0, 0, 0, 0 };
+    private static readonly int[] NeighborOffsetY = { 0, 0, -1, 1, 0, 0 };
+    private static readonly int[] NeighborOffsetZ = { 0, 0, 0, 0, -1, 1 };
+
+    /// <summary>
+    /// Optimizes the voxel model by returning only its surface voxels.
+    /// </summary>
+    /// <param name="voxModel">The voxel model to optimize.</param>
+    /// <returns>Enumerable of surface voxels.</returns>
+    public IEnumerable<Voxel> OptimizeModel(IModel voxModel)
+    {
+        var dimensions = new GridDimensions(voxModel.LocalSize.X, voxModel.LocalSize.Y, voxModel.LocalSize.Z);
+        var voxelGrid = VoxelPresenceGrid.BuildFromModel(voxModel, dimensions);
+
+        return GetSurfaceVoxels(voxModel, voxelGrid);
+    }
+
+    /// <summary>
+    /// Filters surface voxels from the model using the voxel grid.
+    /// </summary>
+    private static IEnumerable<Voxel> GetSurfaceVoxels(IModel voxModel, VoxelPresenceGrid voxelGrid)
+    {
+        var surfaceVoxels = new List<Voxel>();
+
+        foreach (var voxel in voxModel.Voxels)
         {
-            var sizeX = voxModel.LocalSize.X;
-            var sizeY = voxModel.LocalSize.Y;
-            var sizeZ = voxModel.LocalSize.Z;
+            var voxelPosition = new VoxelPosition(voxel.LocalPosition.X, voxel.LocalPosition.Y, voxel.LocalPosition.Z);
 
-            // Creating voxels 3d array.
-            bool[,,] grid = new bool[sizeX, sizeY, sizeZ];
-
-            foreach (var voxel in voxModel.Voxels)
+            if (IsSurfaceVoxel(voxelPosition, voxelGrid))
             {
-                var p = voxel.LocalPosition;
-                grid[p.X, p.Y, p.Z] = true;
+                surfaceVoxels.Add(voxel);
             }
-
-            // Filtering surface voxels.
-            List<Voxel> surfaceVoxels = new();
-
-            int[] dx = { -1, 1, 0, 0, 0, 0 };
-            int[] dy = { 0, 0, -1, 1, 0, 0 };
-            int[] dz = { 0, 0, 0, 0, -1, 1 };
-
-            foreach (var voxel in voxModel.Voxels)
-            {
-                var x = voxel.LocalPosition.X;
-                var y = voxel.LocalPosition.Y;
-                var z = voxel.LocalPosition.Z;
-
-                bool isSurface = false;
-
-                for (int i = 0; i < 6; i++)
-                {
-                    int nx = x + dx[i];
-                    int ny = y + dy[i];
-                    int nz = z + dz[i];
-
-                    // If the neighbor is out of bounds, then it is a boundary voxel
-                    if (nx < 0 || ny < 0 || nz < 0 ||
-                        nx >= sizeX || ny >= sizeY || nz >= sizeZ ||
-                        !grid[nx, ny, nz])
-                    {
-                        isSurface = true;
-                        break;
-                    }
-                }
-
-                if (isSurface)
-                {
-                    surfaceVoxels.Add(voxel);
-                }
-            }
-
-            return surfaceVoxels;
         }
+
+        return surfaceVoxels;
+    }
+
+    /// <summary>
+    /// Determines if a voxel is a surface voxel based on its neighbors.
+    /// </summary>
+    private static bool IsSurfaceVoxel(VoxelPosition voxelPosition, VoxelPresenceGrid grid)
+    {
+        for (int i = 0; i < 6; i++)
+        {
+            var neighbor = voxelPosition.Offset(NeighborOffsetX[i], NeighborOffsetY[i], NeighborOffsetZ[i]);
+
+            if (!grid.IsInside(neighbor) || !grid[neighbor])
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
