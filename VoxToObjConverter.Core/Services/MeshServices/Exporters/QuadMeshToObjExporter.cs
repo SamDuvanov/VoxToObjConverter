@@ -204,8 +204,9 @@ public class QuadMeshToObjExporter
         {
             int currentVertex = triangleVertices[edgeIndex];
             int nextVertex = triangleVertices[(edgeIndex + 1) % TRIANGLE_EDGE_COUNT];
+            var edge = new Edge { StartVertex = currentVertex, EndVertex = nextVertex };
 
-            int? neighborTriangleId = FindNeighboringTriangle(mesh, triangleId, currentVertex, nextVertex);
+            int? neighborTriangleId = FindNeighboringTriangle(mesh, triangleId, edge);
 
             if (neighborTriangleId.HasValue && !processedTriangles.Contains(neighborTriangleId.Value))
             {
@@ -226,12 +227,11 @@ public class QuadMeshToObjExporter
     /// </summary>
     /// <param name="mesh">Source mesh.</param>
     /// <param name="triangleId">ID of the source triangle.</param>
-    /// <param name="edgeVertexA">First vertex of the shared edge.</param>
-    /// <param name="edgeVertexB">Second vertex of the shared edge.</param>
+    /// <param name="edge">Source triangle edge.</param>
     /// <returns>ID of neighboring triangle, or null if not found.</returns>
-    private int? FindNeighboringTriangle(DMesh3 mesh, int triangleId, int edgeVertexA, int edgeVertexB)
+    private int? FindNeighboringTriangle(DMesh3 mesh, int triangleId, Edge edge)
     {
-        int edgeId = mesh.FindEdge(edgeVertexA, edgeVertexB);
+        int edgeId = mesh.FindEdge(edge.StartVertex, edge.EndVertex);
 
         if (edgeId == DMesh3.InvalidID)
         {
@@ -325,9 +325,15 @@ public class QuadMeshToObjExporter
         Vector3d quadCenter = CalculateQuadCenter(mesh, vertices);
         Vector3d tangentU = CreateStableTangentVector(surfaceNormal);
         Vector3d tangentV = surfaceNormal.Cross(tangentU).Normalized;
+        var quadOrientation = new QuadOrientation
+        {
+            CenterPoint = quadCenter,
+            TangentU = tangentU,
+            TangentV = tangentV
+        };
 
         return vertices
-            .OrderBy(vertexId => CalculateAngleFromCenter(mesh, vertexId, quadCenter, tangentU, tangentV))
+            .OrderBy(vertexId => CalculateAngleFromCenter(mesh, vertexId, quadOrientation))
             .ToArray();
     }
 
@@ -358,11 +364,11 @@ public class QuadMeshToObjExporter
     /// <param name="tangentU">First tangent vector for 2D projection.</param>
     /// <param name="tangentV">Second tangent vector for 2D projection.</param>
     /// <returns>Angle in radians from the positive U-axis.</returns>
-    private double CalculateAngleFromCenter(DMesh3 mesh, int vertexId, Vector3d center, Vector3d tangentU, Vector3d tangentV)
+    private double CalculateAngleFromCenter(DMesh3 mesh, int vertexId, QuadOrientation quadOrientation)
     {
-        Vector3d directionFromCenter = mesh.GetVertex(vertexId) - center;
-        double projectedX = directionFromCenter.Dot(tangentU);
-        double projectedY = directionFromCenter.Dot(tangentV);
+        Vector3d directionFromCenter = mesh.GetVertex(vertexId) - quadOrientation.CenterPoint;
+        double projectedX = directionFromCenter.Dot(quadOrientation.TangentU);
+        double projectedY = directionFromCenter.Dot(quadOrientation.TangentV);
 
         return Math.Atan2(projectedY, projectedX);
     }
@@ -457,7 +463,7 @@ public class QuadMeshToObjExporter
     /// Represents a quadrilateral face composed of two adjacent triangles.
     /// Contains the ordered vertex indices and references to the source triangles.
     /// </summary>
-    private class QuadFaceInfo
+    private sealed class QuadFaceInfo
     {
         /// <summary>
         /// Array of 4 vertex indices in counter-clockwise order.
@@ -473,5 +479,42 @@ public class QuadMeshToObjExporter
         /// ID of the second source triangle that forms this quad.
         /// </summary>
         public int SourceTriangleB { get; set; }
+    }
+
+    /// <summary>
+    /// Represents the orientation and projection of a quad in 3D space.
+    /// </summary>
+    private sealed class QuadOrientation
+    {
+        /// <summary>
+        /// Center point of the quad.
+        /// </summary>
+        public Vector3d CenterPoint { get; set; }
+
+        /// <summary>
+        /// First tangent vector for 2D projection.
+        /// </summary>
+        public Vector3d TangentU { get; set; }
+
+        /// <summary>
+        /// Second tangent vector for 2D projection.
+        /// </summary>
+        public Vector3d TangentV { get; set; }
+    }
+
+    /// <summary>
+    /// Represents an edge connecting two vertices in the mesh.
+    /// </summary>
+    private sealed class Edge
+    {
+        /// <summary>
+        /// Start vertex index of the edge.
+        /// </summary>
+        public int StartVertex { get; set; }
+
+        /// <summary>
+        /// End vertex index of the edge.
+        /// </summary>
+        public int EndVertex { get; set; }
     }
 }
