@@ -1,179 +1,265 @@
 ﻿using g3;
 using VoxReader;
-using System.Collections.Generic;
-using System.Linq;
+using VoxToObjConverter.Core.Models;
 
-namespace VoxToObjConverter.Core.Services.MeshServices
+namespace VoxToObjConverter.Core.Services.MeshServices;
+
+/// <summary>
+/// Builds 3D meshes from voxel data using a solid boxy approach.
+/// Only external faces (faces adjacent to external space) are generated to create a solid mesh.
+/// </summary>
+public class MeshBuilder
 {
-    public class MeshBuilder
+    private const int BoundaryExpansion = 1;
+
+    /// <summary>
+    /// Generates a solid 3D mesh of separate triangles from a collection of voxels.
+    /// Uses flood fill algorithm to determine external space and only renders external faces.
+    /// </summary>
+    /// <param name="voxels">Collection of voxels to convert to mesh</param>
+    /// <returns>Generated 3D mesh with only external faces</returns>
+    public DMesh3 GenerateSolidBoxyMesh(IEnumerable<Voxel> voxels)
     {
-        public DMesh3 GenerateSolidBoxyMesh(IEnumerable<Voxel> voxels)
+        var mesh = new DMesh3();
+        var voxelList = voxels.ToList();
+
+        if (!voxelList.Any())
         {
-            var mesh = new DMesh3();
-            var voxelList = voxels.ToList();
-
-            if (!voxelList.Any())
-                return mesh;
-
-            // Создаем хеш-сет для быстрого поиска вокселей
-            var voxelSet = new HashSet<(int x, int y, int z)>(
-                voxelList.Select(v => ((int)v.LocalPosition.X, (int)v.LocalPosition.Y, (int)v.LocalPosition.Z))
-            );
-
-            // Определяем границы модели
-            var bounds = GetModelBounds(voxelList);
-            var expandedBounds = (
-                minX: bounds.minX - 1,
-                maxX: bounds.maxX + 1,
-                minY: bounds.minY - 1,
-                maxY: bounds.maxY + 1,
-                minZ: bounds.minZ - 1,
-                maxZ: bounds.maxZ + 1
-            );
-
-            // Находим внешнее пространство через flood fill
-            var externalSpace = GetExternalSpace(voxelSet, expandedBounds);
-
-            foreach (var voxel in voxelList)
-            {
-                AddVoxelFaces(mesh, voxel, voxelSet, externalSpace);
-            }
-
             return mesh;
         }
 
-        private (int minX, int maxX, int minY, int maxY, int minZ, int maxZ) GetModelBounds(IEnumerable<Voxel> voxels)
+        var voxelPositions = CreateVoxelPositionSet(voxelList);
+        var modelBounds = CalculateModelBounds(voxelList);
+        var expandedBounds = ExpandBounds(modelBounds, BoundaryExpansion);
+        var externalSpace = DetermineExternalSpace(voxelPositions, expandedBounds);
+
+        foreach (var voxel in voxelList)
         {
-            var positions = voxels.Select(v => v.LocalPosition).ToList();
-            return (
-                minX: (int)positions.Min(p => p.X),
-                maxX: (int)positions.Max(p => p.X),
-                minY: (int)positions.Min(p => p.Y),
-                maxY: (int)positions.Max(p => p.Y),
-                minZ: (int)positions.Min(p => p.Z),
-                maxZ: (int)positions.Max(p => p.Z)
-            );
+            AddExternalVoxelFaces(mesh, voxel, externalSpace);
         }
 
-        private HashSet<(int x, int y, int z)> GetExternalSpace(HashSet<(int x, int y, int z)> voxelSet,
-            (int minX, int maxX, int minY, int maxY, int minZ, int maxZ) bounds)
+        return mesh;
+    }
+
+    /// <summary>
+    /// Creates a hash set of voxel positions for fast lookup operations.
+    /// </summary>
+    /// <param name="voxels">Collection of voxels</param>
+    /// <returns>Hash set containing integer coordinates of all voxels</returns>
+    private HashSet<Vector> CreateVoxelPositionSet(IEnumerable<Voxel> voxels)
+    {
+        return new HashSet<Vector>(
+            voxels.Select(v => new Vector(
+                v.LocalPosition.X,
+                v.LocalPosition.Y,
+                v.LocalPosition.Z))
+        );
+    }
+
+    /// <summary>
+    /// Calculates the bounding box of the voxel model.
+    /// </summary>
+    /// <param name="voxels">Collection of voxels</param>
+    /// <returns>Bounding box coordinates</returns>
+    private ModelBoundingBox CalculateModelBounds(IEnumerable<Voxel> voxels)
+    {
+        var positions = voxels.Select(v => v.LocalPosition).ToList();
+
+        return new ModelBoundingBox(
+            minX: positions.Min(p => p.X),
+            maxX: positions.Max(p => p.X),
+            minY: positions.Min(p => p.Y),
+            maxY: positions.Max(p => p.Y),
+            minZ: positions.Min(p => p.Z),
+            maxZ: positions.Max(p => p.Z)
+        );
+    }
+
+    /// <summary>
+    /// Expands the model bounds by the specified amount in all directions.
+    /// </summary>
+    /// <param name="bounds">Original model bounds</param>
+    /// <param name="expansion">Amount to expand in each direction</param>
+    /// <returns>Expanded bounds</returns>
+    private ModelBoundingBox ExpandBounds(ModelBoundingBox bounds, int expansion)
+    {
+        return new ModelBoundingBox(
+            minX: bounds.MinX - expansion,
+            maxX: bounds.MaxX + expansion,
+            minY: bounds.MinY - expansion,
+            maxY: bounds.MaxY + expansion,
+            minZ: bounds.MinZ - expansion,
+            maxZ: bounds.MaxZ + expansion
+        );
+    }
+
+    /// <summary>
+    /// Determines external space using flood fill algorithm starting from the boundary.
+    /// External space consists of all positions that can be reached from the boundary
+    /// without passing through voxels.
+    /// </summary>
+    /// <param name="voxelPositions">Set of voxel positions</param>
+    /// <param name="bounds">Expanded model bounds</param>
+    /// <returns>Set of positions that are external to the model</returns>
+    private HashSet<Vector> DetermineExternalSpace(
+        HashSet<Vector> voxelPositions,
+        ModelBoundingBox bounds)
+    {
+        var externalSpace = new HashSet<Vector>();
+        var queue = new Queue<Vector>();
+        var visited = new HashSet<Vector>();
+
+        // Start flood fill from the corner of expanded bounds
+        var startPoint = new Vector(bounds.MinX, bounds.MinY, bounds.MinZ);
+        queue.Enqueue(startPoint);
+        visited.Add(startPoint);
+
+        var directions = GetSixDirections();
+
+        while (queue.Count > 0)
         {
-            var externalSpace = new HashSet<(int x, int y, int z)>();
-            var queue = new Queue<(int x, int y, int z)>();
-            var visited = new HashSet<(int x, int y, int z)>();
+            var current = queue.Dequeue();
+            externalSpace.Add(current);
 
-            // Начинаем flood fill от угла расширенных границ
-            var startPoint = (bounds.minX, bounds.minY, bounds.minZ);
-            queue.Enqueue(startPoint);
-            visited.Add(startPoint);
-
-            var directions = new[]
+            foreach (var direction in directions)
             {
-                (-1, 0, 0), (1, 0, 0),
-                (0, -1, 0), (0, 1, 0),
-                (0, 0, -1), (0, 0, 1)
-            };
+                var next = current.Add(direction);
 
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                externalSpace.Add(current);
-
-                foreach (var (dx, dy, dz) in directions)
+                if (!IsWithinBounds(next, bounds) ||
+                    visited.Contains(next) ||
+                    voxelPositions.Contains(next))
                 {
-                    var next = (current.x + dx, current.y + dy, current.z + dz);
-
-                    // Проверяем границы
-                    if (next.Item1 < bounds.minX || next.Item1 > bounds.maxX ||
-                        next.Item2 < bounds.minY || next.Item2 > bounds.maxY ||
-                        next.Item3 < bounds.minZ || next.Item3 > bounds.maxZ)
-                        continue;
-
-                    // Пропускаем уже посещенные или занятые вокселями позиции
-                    if (visited.Contains(next) || voxelSet.Contains(next))
-                        continue;
-
-                    visited.Add(next);
-                    queue.Enqueue(next);
+                    continue;
                 }
-            }
 
-            return externalSpace;
+                visited.Add(next);
+                queue.Enqueue(next);
+            }
         }
 
-        private void AddVoxelFaces(DMesh3 mesh, Voxel voxel, HashSet<(int x, int y, int z)> voxelSet,
-            HashSet<(int x, int y, int z)> externalSpace)
+        return externalSpace;
+    }
+
+    /// <summary>
+    /// Returns the six cardinal directions for 3D space navigation.
+    /// </summary>
+    /// <returns>Array of direction vectors</returns>
+    private Vector[] GetSixDirections()
+    {
+        return new[]
         {
-            var x = (int)voxel.LocalPosition.X;
-            var y = (int)voxel.LocalPosition.Y;
-            var z = (int)voxel.LocalPosition.Z;
+            new Vector(-1, 0, 0), new Vector(1, 0, 0),
+            new Vector(0, -1, 0), new Vector(0, 1, 0),
+            new Vector(0, 0, -1), new Vector(0, 0, 1)
+        };
+    }
 
-            // Определяем 8 вершин куба
-            var v000 = new Vector3d(x, y, z);         // 0,0,0
-            var v001 = new Vector3d(x, y, z + 1);     // 0,0,1
-            var v010 = new Vector3d(x, y + 1, z);     // 0,1,0
-            var v011 = new Vector3d(x, y + 1, z + 1); // 0,1,1
-            var v100 = new Vector3d(x + 1, y, z);     // 1,0,0
-            var v101 = new Vector3d(x + 1, y, z + 1); // 1,0,1
-            var v110 = new Vector3d(x + 1, y + 1, z); // 1,1,0
-            var v111 = new Vector3d(x + 1, y + 1, z + 1); // 1,1,1
+    /// <summary>
+    /// Checks if a position is within the specified bounds.
+    /// </summary>
+    /// <param name="position">Position to check</param>
+    /// <param name="bounds">Bounds to check against</param>
+    /// <returns>True if position is within bounds</returns>
+    private bool IsWithinBounds(Vector position, ModelBoundingBox bounds)
+    {
+        return position.X >= bounds.MinX && position.X <= bounds.MaxX &&
+               position.Y >= bounds.MinY && position.Y <= bounds.MaxY &&
+               position.Z >= bounds.MinZ && position.Z <= bounds.MaxZ;
+    }
 
-            // Добавляем грани только если соседняя позиция является внешним пространством
+    /// <summary>
+    /// Adds only external faces of a voxel to the mesh.
+    /// A face is external if its adjacent position is in external space.
+    /// </summary>
+    /// <param name="mesh">Mesh to add faces to</param>
+    /// <param name="voxel">Voxel to process</param>
+    /// <param name="externalSpace">Set of external space positions</param>
+    private void AddExternalVoxelFaces(DMesh3 mesh, Voxel voxel, HashSet<Vector> externalSpace)
+    {
+        var position = new Vector(
+            voxel.LocalPosition.X,
+            voxel.LocalPosition.Y,
+            voxel.LocalPosition.Z);
 
-            // Передняя грань (Z-) - нормаль направлена в сторону -Z
-            var neighborZMinus = (x, y, z - 1);
-            if (externalSpace.Contains(neighborZMinus))
-            {
-                AddQuad(mesh, v000, v010, v110, v100);
-            }
+        var cubeVertices = GenerateCubeVertices(position);
+        var faceDefinitions = GetCubeFaceDefinitions();
 
-            // Задняя грань (Z+) - нормаль направлена в сторону +Z
-            var neighborZPlus = (x, y, z + 1);
-            if (externalSpace.Contains(neighborZPlus))
-            {
-                AddQuad(mesh, v001, v101, v111, v011);
-            }
-
-            // Левая грань (X-) - нормаль направлена в сторону -X
-            var neighborXMinus = (x - 1, y, z);
-            if (externalSpace.Contains(neighborXMinus))
-            {
-                AddQuad(mesh, v000, v001, v011, v010);
-            }
-
-            // Правая грань (X+) - нормаль направлена в сторону +X
-            var neighborXPlus = (x + 1, y, z);
-            if (externalSpace.Contains(neighborXPlus))
-            {
-                AddQuad(mesh, v100, v110, v111, v101);
-            }
-
-            // Нижняя грань (Y-) - нормаль направлена в сторону -Y
-            var neighborYMinus = (x, y - 1, z);
-            if (externalSpace.Contains(neighborYMinus))
-            {
-                AddQuad(mesh, v000, v100, v101, v001);
-            }
-
-            // Верхняя грань (Y+) - нормаль направлена в сторону +Y
-            var neighborYPlus = (x, y + 1, z);
-            if (externalSpace.Contains(neighborYPlus))
-            {
-                AddQuad(mesh, v010, v011, v111, v110);
-            }
-        }
-
-        private void AddQuad(DMesh3 mesh, Vector3d v0, Vector3d v1, Vector3d v2, Vector3d v3)
+        foreach (var face in faceDefinitions)
         {
-            // Добавляем вершины
-            var i0 = mesh.AppendVertex(v0);
-            var i1 = mesh.AppendVertex(v1);
-            var i2 = mesh.AppendVertex(v2);
-            var i3 = mesh.AppendVertex(v3);
+            var neighborPosition = position.Add(face.Direction);
 
-            // Добавляем два треугольника для квада с правильным порядком вершин (против часовой стрелки)
-            mesh.AppendTriangle(i0, i1, i2);
-            mesh.AppendTriangle(i0, i2, i3);
+            if (externalSpace.Contains(neighborPosition))
+            {
+                AddQuadFace(mesh, cubeVertices, face.VertexIndices);
+            }
         }
+    }
+
+    /// <summary>
+    /// Generates the 8 vertices of a cube at the specified position.
+    /// </summary>
+    /// <param name="position">Position of the cube</param>
+    /// <returns>Array of 8 cube vertices</returns>
+    private Vector3d[] GenerateCubeVertices(Vector position)
+    {
+        var x = position.X;
+        var y = position.Y;
+        var z = position.Z;
+
+        return new[]
+        {
+            new Vector3d(x, y, z),         // 0: 000
+            new Vector3d(x, y, z + 1),     // 1: 001
+            new Vector3d(x, y + 1, z),     // 2: 010
+            new Vector3d(x, y + 1, z + 1), // 3: 011
+            new Vector3d(x + 1, y, z),     // 4: 100
+            new Vector3d(x + 1, y, z + 1), // 5: 101
+            new Vector3d(x + 1, y + 1, z), // 6: 110
+            new Vector3d(x + 1, y + 1, z + 1) // 7: 111
+        };
+    }
+
+    /// <summary>
+    /// Defines the 6 faces of a cube with their directions and vertex indices.
+    /// </summary>
+    /// <returns>Array of cube face definitions</returns>
+    private QuadFace[] GetCubeFaceDefinitions()
+    {
+        return new[]
+        {
+            // Front face (Z-) - normal points toward -Z
+            new QuadFace(new Vector(0, 0, -1), new[] { 0, 2, 6, 4 }),
+            // Back face (Z+) - normal points toward +Z
+            new QuadFace(new Vector(0, 0, 1), new[] { 1, 5, 7, 3 }),
+            // Left face (X-) - normal points toward -X
+            new QuadFace(new Vector(-1, 0, 0), new[] { 0, 1, 3, 2 }),
+            // Right face (X+) - normal points toward +X
+            new QuadFace(new Vector(1, 0, 0), new[] { 4, 6, 7, 5 }),
+            // Bottom face (Y-) - normal points toward -Y
+            new QuadFace(new Vector(0, -1, 0), new[] { 0, 4, 5, 1 }),
+            // Top face (Y+) - normal points toward +Y
+            new QuadFace(new Vector(0, 1, 0), new[] { 2, 3, 7, 6 })
+        };
+    }
+
+    /// <summary>
+    /// Adds a quad face to the mesh using the specified vertices.
+    /// </summary>
+    /// <param name="mesh">Mesh to add the quad to</param>
+    /// <param name="vertices">Array of cube vertices</param>
+    /// <param name="indices">Indices of vertices that form the quad</param>
+    private void AddQuadFace(DMesh3 mesh, Vector3d[] vertices, int[] indices)
+    {
+        // Add vertices to mesh
+        var meshIndices = new int[4];
+
+        for (int i = 0; i < 4; i++)
+        {
+            meshIndices[i] = mesh.AppendVertex(vertices[indices[i]]);
+        }
+
+        // Add two triangles to form the quad (counter-clockwise winding)
+        mesh.AppendTriangle(meshIndices[0], meshIndices[1], meshIndices[2]);
+        mesh.AppendTriangle(meshIndices[0], meshIndices[2], meshIndices[3]);
     }
 }

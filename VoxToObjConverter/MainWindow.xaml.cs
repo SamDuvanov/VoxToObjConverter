@@ -1,8 +1,7 @@
-﻿using g3;
-using gs;
-using System.Windows;
+﻿using System.Windows;
 using VoxReader;
 using VoxToObjConverter.Core.Services.MeshServices;
+using VoxToObjConverter.Core.Services.MeshServices.Exporters;
 using VoxToObjConverter.Core.Services.VoxelServices;
 
 namespace VoxToObjConverter
@@ -28,7 +27,7 @@ namespace VoxToObjConverter
             welder.Weld();
 
             var meshToObjExporter = new QuadObjExporter();
-            var meshToObjExporter2 = new MeshToObjExporter();
+            var meshToObjExporter2 = new TriangleMeshToObjExporter();
             meshToObjExporter2.ExportToFile(mesh, "model_optimized.obj");
         }
     }
