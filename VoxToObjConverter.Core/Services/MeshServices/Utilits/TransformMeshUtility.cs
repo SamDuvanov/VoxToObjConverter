@@ -8,30 +8,37 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
     {
         public void TransformVoxModelMesh(IModel voxModel, DMesh3 voxModelMesh)
         {
-            // Конвертация поворота модели VOX → g3
+            // 1. Поворот из VOX
             Quaterniond modelRotation = MatrixToQuaternion(voxModel.GlobalRotation);
+
+            // 2. VOX → g3 (Z вверх → Y вверх)
             Quaterniond fixRotation = Quaterniond.AxisAngleD(Vector3d.AxisX, -90);
+
+            // 3. Общий поворот
             Quaterniond finalRotation = fixRotation * modelRotation;
 
-            // Получаем позицию из VOX
+            // 4. Глобальная позиция
             Vector3d originalPos = new Vector3d(
                 voxModel.GlobalPosition.X,
                 voxModel.GlobalPosition.Y,
                 voxModel.GlobalPosition.Z
             );
 
-            // Применяем фиксирующий поворот и к позиции, чтобы перевести в систему g3
             Vector3d rotatedPos = fixRotation * originalPos;
 
-            // Поворот и смещение вершин меша
+            // 5. Центровка по Z — вычисляем bounding box из LocalPosition всех вокселей
+            var voxels = voxModel.Voxels;
+            double zMin = voxels.Min(v => v.LocalPosition.Z);
+            double zMax = voxels.Max(v => v.LocalPosition.Z);
+            double zCenter = (zMin + zMax) / 2.0;
+            Vector3d centerOffset = new Vector3d(0, 0, zCenter);
+
+            // 6. Трансформация вершин
             for (int vid = 0; vid < voxModelMesh.VertexCount; vid++)
             {
                 Vector3d v = voxModelMesh.GetVertex(vid);
-
-                // Поворачиваем локальные вершины
-                Vector3d rotatedVertex = finalRotation * v;
-
-                // Смещаем на позицию модели в системе g3
+                Vector3d centered = v - centerOffset;
+                Vector3d rotatedVertex = finalRotation * centered;
                 voxModelMesh.SetVertex(vid, rotatedVertex + rotatedPos);
             }
         }
