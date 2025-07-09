@@ -8,7 +8,7 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Exporters;
 /// Attempts to merge adjacent triangles into quads where geometrically feasible,
 /// falling back to triangle representation for remaining faces.
 /// </summary>
-public class QuadMeshToObjExporter
+public class QuadMeshToObjExporter : IMeshToObjExporter
 {
     /// <summary>
     /// Cosine tolerance for determining if an angle is approximately 90 degrees.

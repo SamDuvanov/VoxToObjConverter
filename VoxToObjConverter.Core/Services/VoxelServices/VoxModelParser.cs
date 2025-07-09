@@ -4,9 +4,9 @@ namespace VoxToObjConverter.Core.Services.VoxelServices
 {
     public class VoxModelParser
     {
-        public IModel ReadModel()
+        public IModel ReadModel(string voxFilePath)
         {
-            var voxFile = VoxReader.VoxReader.Read("Vox Models/teapot.vox");
+            var voxFile = VoxReader.VoxReader.Read(voxFilePath);
 
             return voxFile.Models[0];
         }

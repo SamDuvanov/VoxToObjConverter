@@ -6,10 +6,29 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="assets\icon.ico" />
+    <None Remove="assets\logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ookii.Dialogs.Wpf" Version="5.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\VoxToObjConverter.Core\VoxToObjConverter.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="assets\icon.ico">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="assets\logo.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
   </ItemGroup>
 
 </Project>
