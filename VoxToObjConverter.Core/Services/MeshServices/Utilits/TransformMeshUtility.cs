@@ -8,30 +8,31 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
     {
         public void TransformVoxModelMesh(IModel voxModel, DMesh3 voxModelMesh)
         {
-            // 1. Конвертируем GlobalRotation из VOX в Quaterniond
+            // Конвертация поворота модели VOX → g3
             Quaterniond modelRotation = MatrixToQuaternion(voxModel.GlobalRotation);
-
-            // 2. Поворот -90° по оси X (переход VOX → g3)
             Quaterniond fixRotation = Quaterniond.AxisAngleD(Vector3d.AxisX, -90);
-
-            // 3. Итоговая трансформация: сначала VOX, потом -90 по X
             Quaterniond finalRotation = fixRotation * modelRotation;
 
-            // 4. Поворот позиции VOX-модели
+            // Получаем позицию из VOX
             Vector3d originalPos = new Vector3d(
                 voxModel.GlobalPosition.X,
                 voxModel.GlobalPosition.Y,
                 voxModel.GlobalPosition.Z
             );
+
+            // Применяем фиксирующий поворот и к позиции, чтобы перевести в систему g3
             Vector3d rotatedPos = fixRotation * originalPos;
 
-            // 5. Применяем трансформацию к каждой вершине меша
+            // Поворот и смещение вершин меша
             for (int vid = 0; vid < voxModelMesh.VertexCount; vid++)
             {
                 Vector3d v = voxModelMesh.GetVertex(vid);
-                Vector3d local = v - originalPos;
-                Vector3d rotated = finalRotation * local;
-                voxModelMesh.SetVertex(vid, rotated + rotatedPos);
+
+                // Поворачиваем локальные вершины
+                Vector3d rotatedVertex = finalRotation * v;
+
+                // Смещаем на позицию модели в системе g3
+                voxModelMesh.SetVertex(vid, rotatedVertex + rotatedPos);
             }
         }
 
