@@ -66,6 +66,11 @@ namespace VoxToObjConverter
             }
         }
 
+        private void ClearFileList_Click(object sender, RoutedEventArgs e)
+        {
+            FileListBox.Items.Clear();
+        }
+
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
@@ -112,7 +117,7 @@ namespace VoxToObjConverter
             await RunCoverter(outputDir, meshType, voxFilePaths);
 
             ShowLoading(false);
-            FileListBox.Items.Clear();
+
             ShowInfoMessageBox("Conversion complete.");
         }
 
@@ -123,6 +128,16 @@ namespace VoxToObjConverter
                 ShowErrorMessageBox("Please add at least one .vox file.");
 
                 return false;
+            }
+
+            foreach (var item in FileListBox.Items)
+            {
+                if (!File.Exists(item.ToString()))
+                {
+                    ShowErrorMessageBox($"File not found: {item}");
+
+                    return false;
+                }
             }
 
             string outputDir = OutputDirectoryTextBox.Text;

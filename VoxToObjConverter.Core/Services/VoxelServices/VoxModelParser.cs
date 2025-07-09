@@ -4,11 +4,11 @@ namespace VoxToObjConverter.Core.Services.VoxelServices
 {
     public class VoxModelParser
     {
-        public IModel ReadModel(string voxFilePath)
+        public IModel[] ReadModel(string voxFilePath)
         {
             var voxFile = VoxReader.VoxReader.Read(voxFilePath);
 
-            return voxFile.Models[0];
+            return voxFile.Models;
         }
     }
 }

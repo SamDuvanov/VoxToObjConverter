@@ -5,6 +5,7 @@ using VoxToObjConverter.Core.Services.VoxelServices;
 using VoxToObjConverter.Core.Enums;
 using VoxReader.Interfaces;
 using g3;
+using VoxToObjConverter.Core.Services.MeshServices.Utils;
 
 namespace VoxToObjConverter.Core;
 
@@ -25,20 +26,42 @@ public class ConvertingManager
     {
         foreach (string filePath in _convertingOptions.VoxFilePaths)
         {
-            IModel voxelModel = ParseVoxFile(filePath);
-            IEnumerable<Voxel> optimizedVoxelModel = OptimizeVoxelModel(voxelModel);
-            DMesh3 mesh = CreateTrianglesMesh(optimizedVoxelModel);
-            WeldTrianglesIntoSolidMesh(mesh);
-            ExportMeshToObjFile(filePath, mesh);
+            IModel[] voxelModels = ParseVoxFile(filePath);
+            DMesh3 resultMesh = GetCombinedSolidTriangleMesh(voxelModels);
+            ExportMeshToObjFile(filePath, resultMesh);
         }
     }
 
-    private static IModel ParseVoxFile(string filePath)
+    private static IModel[] ParseVoxFile(string filePath)
     {
         var voxParser = new VoxModelParser();
-        var voxelModel = voxParser.ReadModel(filePath);
+        var voxelModels = voxParser.ReadModel(filePath);
 
-        return voxelModel;
+        return voxelModels;
+    }
+
+    private DMesh3 GetCombinedSolidTriangleMesh(IModel[] voxelModels)
+    {
+        DMesh3 combinedMesh = new DMesh3();
+        var transformMeshUtility = new TransformMeshUtility();
+
+        foreach (IModel voxelModel in voxelModels)
+        {
+            IEnumerable<Voxel> optimizedVoxels = OptimizeVoxelModel(voxelModel);
+            DMesh3 originalMesh = CreateTrianglesMesh(optimizedVoxels);
+            WeldTrianglesIntoSolidMesh(originalMesh);
+            DMesh3 transformedMesh = new DMesh3(originalMesh);
+            transformMeshUtility.TransformVoxModelMesh(voxelModel, transformedMesh);
+            AddMeshToParent(combinedMesh, transformedMesh);
+        }
+
+        return combinedMesh;
+
+        static void AddMeshToParent(DMesh3 parentMesh, DMesh3 meshToAdd)
+        {
+            MeshEditor editor = new MeshEditor(parentMesh);
+            editor.AppendMesh(meshToAdd);
+        }
     }
 
     private static IEnumerable<Voxel> OptimizeVoxelModel(IModel voxelModel)
