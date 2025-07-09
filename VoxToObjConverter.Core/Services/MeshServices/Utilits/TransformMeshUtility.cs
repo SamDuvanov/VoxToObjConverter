@@ -8,16 +8,16 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
     {
         public void TransformVoxModelMesh(IModel voxModel, DMesh3 voxModelMesh)
         {
-            // 1. Поворот из VOX
+            // 1. Поворот VOX → Quaterniond
             Quaterniond modelRotation = MatrixToQuaternion(voxModel.GlobalRotation);
 
-            // 2. VOX → g3 (Z вверх → Y вверх)
+            // 2. Фикс-поворот VOX → g3 (Z вверх → Y вверх)
             Quaterniond fixRotation = Quaterniond.AxisAngleD(Vector3d.AxisX, -90);
 
             // 3. Общий поворот
             Quaterniond finalRotation = fixRotation * modelRotation;
 
-            // 4. Глобальная позиция
+            // 4. Глобальная позиция модели
             Vector3d originalPos = new Vector3d(
                 voxModel.GlobalPosition.X,
                 voxModel.GlobalPosition.Y,
@@ -26,20 +26,28 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
 
             Vector3d rotatedPos = fixRotation * originalPos;
 
-            // 5. Центровка по Z — вычисляем bounding box из LocalPosition всех вокселей
+            // 5. Центровка по всем осям (X, Y, Z)
             var voxels = voxModel.Voxels;
+            double xMin = voxels.Min(v => v.LocalPosition.X);
+            double xMax = voxels.Max(v => v.LocalPosition.X);
+            double yMin = voxels.Min(v => v.LocalPosition.Y);
+            double yMax = voxels.Max(v => v.LocalPosition.Y);
             double zMin = voxels.Min(v => v.LocalPosition.Z);
             double zMax = voxels.Max(v => v.LocalPosition.Z);
-            double zCenter = (zMin + zMax) / 2.0;
-            Vector3d centerOffset = new Vector3d(0, 0, zCenter);
 
-            // 6. Трансформация вершин
+            Vector3d centerOffset = new Vector3d(
+                (xMin + xMax) / 2.0,
+                (yMin + yMax) / 2.0,
+                (zMin + zMax) / 2.0
+            );
+
+            // 6. Поворот и смещение всех вершин меша
             for (int vid = 0; vid < voxModelMesh.VertexCount; vid++)
             {
                 Vector3d v = voxModelMesh.GetVertex(vid);
                 Vector3d centered = v - centerOffset;
-                Vector3d rotatedVertex = finalRotation * centered;
-                voxModelMesh.SetVertex(vid, rotatedVertex + rotatedPos);
+                Vector3d rotated = finalRotation * centered;
+                voxModelMesh.SetVertex(vid, rotated + rotatedPos);
             }
         }
 
