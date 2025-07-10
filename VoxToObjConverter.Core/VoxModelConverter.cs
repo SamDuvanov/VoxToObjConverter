@@ -12,11 +12,11 @@ namespace VoxToObjConverter.Core;
 /// <summary>
 /// Performs full conversion of .vox files to .obj format.
 /// </summary>
-public class ConvertingManager
+public class VoxModelConverter
 {
     private readonly ConvertingOptions _convertingOptions;
 
-    public ConvertingManager(ConvertingOptions convertingOptions)
+    public VoxModelConverter(ConvertingOptions convertingOptions)
     {
         _convertingOptions = convertingOptions ??
             throw new ArgumentNullException(nameof(convertingOptions));

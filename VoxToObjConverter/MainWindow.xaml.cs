@@ -189,7 +189,7 @@ namespace VoxToObjConverter
                     MeshType = meshType,
                 };
 
-                var converter = new ConvertingManager(options);
+                var converter = new VoxModelConverter(options);
                 converter.ConvertVoxToObj();
             });
         }
