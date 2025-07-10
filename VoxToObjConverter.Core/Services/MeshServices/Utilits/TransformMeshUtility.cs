@@ -26,19 +26,13 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
 
             Vector3d rotatedPos = fixRotation * originalPos;
 
-            // 3. Центр модели (по LocalSize)
-            Vector3d centerOffset = new Vector3d(
-                0,
-                0,
-                voxModel.LocalSize.Z / 2.0
-            );
-
             // 6. Поворот и смещение всех вершин меша
             for (int vid = 0; vid < voxModelMesh.VertexCount; vid++)
             {
                 Vector3d v = voxModelMesh.GetVertex(vid);
-                Vector3d centered = v - centerOffset;
-                Vector3d rotated = finalRotation * centered;
+                // Применяем вращение напрямую к координатам вершины
+                Vector3d rotated = finalRotation * v;
+                // Устанавливаем новую позицию вершины
                 voxModelMesh.SetVertex(vid, rotated + rotatedPos);
             }
         }
