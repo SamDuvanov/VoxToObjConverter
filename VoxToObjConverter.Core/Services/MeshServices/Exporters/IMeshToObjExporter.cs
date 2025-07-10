@@ -4,6 +4,6 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Exporters
 {
     public interface IMeshToObjExporter
     {
-        void ExportToFile(DMesh3 mesh, string filePath);
+        void ExportToFile(DMesh3 mesh, string outputFilePath);
     }
 }
