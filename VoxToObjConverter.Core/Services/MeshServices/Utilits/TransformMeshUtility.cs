@@ -45,7 +45,7 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
             for (int vid = 0; vid < voxModelMesh.VertexCount; vid++)
             {
                 Vector3d v = voxModelMesh.GetVertex(vid);
-                Vector3d centered = v - centerOffset;
+                Vector3d centered = v;
                 Vector3d rotated = finalRotation * centered;
                 voxModelMesh.SetVertex(vid, rotated + rotatedPos);
             }
