@@ -22,6 +22,9 @@ public class ConvertingManager
             throw new ArgumentNullException(nameof(convertingOptions));
     }
 
+    /// <summary>
+    /// Converts all specified .vox files to .obj format basing on the provided options.
+    /// </summary>
     public void ConvertVoxToObj()
     {
         foreach (string filePath in _convertingOptions.VoxFilePaths)
@@ -40,6 +43,11 @@ public class ConvertingManager
         return voxelModels;
     }
 
+    /// <summary>
+    /// Combines all voxel models into a single solid triangle mesh.
+    /// </summary>
+    /// <param name="voxelModels">Voxel models from the single vox file.</param>
+    /// <returns></returns>
     private DMesh3 GetCombinedSolidTriangleMesh(IModel[] voxelModels)
     {
         DMesh3 combinedMesh = new DMesh3();
@@ -51,7 +59,7 @@ public class ConvertingManager
             DMesh3 originalMesh = CreateTrianglesMesh(optimizedVoxels);
             WeldTrianglesIntoSolidMesh(originalMesh);
             DMesh3 transformedMesh = new DMesh3(originalMesh);
-            transformMeshUtility.TransformVoxModelMesh(voxelModel, transformedMesh);
+            transformMeshUtility.ApplyTransformToMesh(voxelModel, transformedMesh);
             AddMeshToParent(combinedMesh, transformedMesh);
         }
 
