@@ -168,7 +168,7 @@ public class MeshBuilder
     }
 
     /// <summary>
-    /// Adds only external faces of a voxel to the mesh.
+    /// Adds only external faces of a voxel to the mesh (Face Culling).
     /// A face is external if its adjacent position is in external space.
     /// </summary>
     /// <param name="mesh">Mesh to add faces to</param>
