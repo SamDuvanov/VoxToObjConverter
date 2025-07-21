@@ -1,4 +1,5 @@
 ﻿using g3;
+using System.Globalization;
 using System.Text;
 
 namespace VoxToObjConverter.Core.Services.MeshServices.Exporters;
@@ -39,7 +40,7 @@ public class TriangleMeshToObjExporter : IMeshToObjExporter
         foreach (int vertexId in mesh.VertexIndices())
         {
             var vertex = mesh.GetVertex(vertexId);
-            builder.AppendLine(string.Format("v {0:F6} {1:F6} {2:F6}", vertex.x, vertex.y, vertex.z));
+            builder.AppendLine(string.Format(CultureInfo.InvariantCulture, "v {0:F6} {1:F6} {2:F6}", vertex.x, vertex.y, vertex.z));
         }
     }
 
@@ -67,7 +68,7 @@ public class TriangleMeshToObjExporter : IMeshToObjExporter
         foreach (int vertexId in mesh.VertexIndices())
         {
             var normal = mesh.GetVertexNormal(vertexId);
-            builder.AppendLine(string.Format("vn {0:F6} {1:F6} {2:F6}", normal.x, normal.y, normal.z));
+            builder.AppendLine(string.Format(CultureInfo.InvariantCulture, "vn {0:F6} {1:F6} {2:F6}", normal.x, normal.y, normal.z));
         }
     }
 }

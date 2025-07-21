@@ -1,4 +1,5 @@
 ﻿using g3;
+using System.Globalization;
 using System.Text;
 
 namespace VoxToObjConverter.Core.Services.MeshServices.Exporters;
@@ -91,7 +92,7 @@ public class QuadMeshToObjExporter : IMeshToObjExporter
         foreach (int vertexId in mesh.VertexIndices())
         {
             Vector3d vertex = mesh.GetVertex(vertexId);
-            objContent.AppendLine(string.Format("v {0:F6} {1:F6} {2:F6}", vertex.x, vertex.y, vertex.z));
+            objContent.AppendLine(string.Format(CultureInfo.InvariantCulture, "v {0:F6} {1:F6} {2:F6}", vertex.x, vertex.y, vertex.z));
         }
     }
 
@@ -105,7 +106,7 @@ public class QuadMeshToObjExporter : IMeshToObjExporter
         foreach (int vertexId in mesh.VertexIndices())
         {
             Vector3d normal = mesh.GetVertexNormal(vertexId);
-            objContent.AppendLine(string.Format("vn {0:F6} {1:F6} {2:F6}", normal.x, normal.y, normal.z));
+            objContent.AppendLine(string.Format(CultureInfo.InvariantCulture, "vn {0:F6} {1:F6} {2:F6}", normal.x, normal.y, normal.z));
         }
     }
 
