@@ -29,6 +29,108 @@ namespace VoxToObjConverter.Core.Services.MeshServices.Utils
         }
 
         /// <summary>
+        /// Aligns the mesh so that its bounding box minimum corner is at the origin (0,0,0).
+        /// This moves the mesh so that it "starts" at the origin in all directions.
+        /// </summary>
+        public void AlignMeshToOrigin(DMesh3 mesh)
+        {
+            double minX = double.MaxValue;
+            double minY = double.MaxValue;
+            double minZ = double.MaxValue;
+
+            foreach (int vid in mesh.VertexIndices())
+            {
+                Vector3d v = mesh.GetVertex(vid);
+
+                if (v.x < minX)
+                {
+                    minX = v.x;
+                }
+
+                if (v.y < minY)
+                {
+                    minY = v.y;
+                }
+
+                if (v.z < minZ)
+                {
+                    minZ = v.z;
+                }
+            }
+
+            Vector3d shift = new Vector3d(minX, minY, minZ);
+
+            for (int vid = 0; vid < mesh.VertexCount; vid++)
+            {
+                Vector3d v = mesh.GetVertex(vid);
+                mesh.SetVertex(vid, v - shift);
+            }
+        }
+
+        /// <summary>
+        /// Shifts the mesh so that its bounding box center aligns with the origin (0,0,0).
+        /// Useful when you want the model to be centered around world origin.
+        /// </summary>
+        public void CenterMeshAtOrigin(DMesh3 mesh)
+        {
+            double minX = double.MaxValue, maxX = double.MinValue;
+            double minY = double.MaxValue, maxY = double.MinValue;
+            double minZ = double.MaxValue, maxZ = double.MinValue;
+
+            // Compute bounding box extents
+            foreach (int vid in mesh.VertexIndices())
+            {
+                Vector3d v = mesh.GetVertex(vid);
+
+                if (v.x < minX)
+                {
+                    minX = v.x;
+                }
+
+                if (v.x > maxX)
+                {
+                    maxX = v.x;
+                }
+
+                if (v.y < minY)
+                {
+                    minY = v.y;
+                }
+
+                if (v.y > maxY)
+                {
+                    maxY = v.y;
+                }
+
+                if (v.z < minZ)
+                {
+                    minZ = v.z;
+                }
+
+                if (v.z <= maxZ)
+                {
+                    continue;
+                }
+
+                maxZ = v.z;
+            }
+
+            // Calculate bounding box center
+            Vector3d center = new Vector3d(
+                (minX + maxX) / 2.0,
+                (minY + maxY) / 2.0,
+                (minZ + maxZ) / 2.0
+            );
+
+            // Shift all vertices so that center aligns with origin
+            for (int vid = 0; vid < mesh.VertexCount; vid++)
+            {
+                Vector3d v = mesh.GetVertex(vid);
+                mesh.SetVertex(vid, v - center);
+            }
+        }
+
+        /// <summary>
         /// Combines the model's rotation with coordinate system fix rotation.
         /// </summary>
         private Quaterniond GetFinalRotation(IModel voxModel)

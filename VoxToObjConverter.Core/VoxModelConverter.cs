@@ -63,6 +63,8 @@ public class VoxModelConverter
             AddMeshToParent(combinedMesh, transformedMesh);
         }
 
+        transformMeshUtility.AlignMeshToOrigin(combinedMesh);
+
         return combinedMesh;
 
         static void AddMeshToParent(DMesh3 parentMesh, DMesh3 meshToAdd)
